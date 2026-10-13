@@ -1,0 +1,43 @@
+From 3892bf68c86d604575a9f44de08462cf597e26d5 Mon Sep 17 00:00:00 2001
+From: Mark Harfouche <mark.harfouche@gmail.com>
+Date: Tue, 13 Oct 2026 09:36:42 -0400
+Subject: [PATCH] Use the wasm-gc trampoline on iOS when the runtime has JSPI
+
+Since iOS 18.3.1 the JS trampoline is used on iOS, to work around a WebKit
+bug with the wasm-gc trampoline (https://bugs.webkit.org/show_bug.cgi?id=293113).
+The JS trampoline puts a JS frame under every call of a C function, and JSPI
+cannot suspend through a JS frame. Safari 27 has JSPI, so there the first
+stack switch (e.g. pyodide.ffi.run_sync) fails with
+
+    SuspendError: JavaScript frames found between WebAssembly.Suspending
+    and WebAssembly.promising
+
+which Pyodide reports as a fatal error. Only use the workaround in a
+runtime without JSPI.
+---
+ Python/emscripten_trampoline.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/Python/emscripten_trampoline.c b/Python/emscripten_trampoline.c
+index 1833311..d887bcc 100644
+--- a/Python/emscripten_trampoline.c
++++ b/Python/emscripten_trampoline.c
+@@ -65,7 +65,14 @@ function getPyEMTrampolinePtr() {
+         // AND if the device has multi-touch capabilities (navigator.maxTouchPoints > 1)
+         (navigator.platform === 'MacIntel' && typeof navigator.maxTouchPoints !== 'undefined' && navigator.maxTouchPoints > 1)
+     );
+-    if (isIOS) {
++    // The JS trampoline puts a JS frame under every call of a C function, and
++    // JSPI cannot suspend through a JS frame: with it, the first stack switch
++    // fails with "SuspendError: JavaScript frames found between
++    // WebAssembly.Suspending and WebAssembly.promising". So only use the
++    // workaround in a runtime without JSPI. Safari 27, the first with JSPI,
++    // runs the wasm-gc trampoline on iOS.
++    const hasJSPI = typeof WebAssembly.Suspending === 'function';
++    if (isIOS && !hasJSPI) {
+         return 0;
+     }
+     let trampolineModule;
+-- 
+2.55.0
+
