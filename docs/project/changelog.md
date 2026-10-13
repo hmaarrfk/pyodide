@@ -17,6 +17,13 @@ myst:
 
 ## Unreleased
 
+- {{ Fix }} Fixed a fatal error at the first stack switch (for instance
+  {py:func}`pyodide.ffi.run_sync`) in Safari on iOS: "SuspendError: JavaScript
+  frames found between WebAssembly.Suspending and WebAssembly.promising". On iOS
+  the JavaScript call trampoline was used to work around a WebKit bug, and JSPI
+  cannot suspend through a JavaScript frame. A runtime that has JSPI now uses
+  the wasm-gc trampoline on iOS too.
+
 - {{ Fix }} The Windows `python` CLI now handles paths across multiple drive
   letters by mounting referenced drives at distinct virtual roots such as `/c`
   and `/d`.
